@@ -145,12 +145,33 @@ function asNumber(v: any) {
     : Number(String(v ?? "").replace(/[₪,\s]/g, "")) || 0;
 }
 function iso(v: any) {
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  const s = String(v ?? "").trim(),
-    m = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-  return m
-    ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`
-    : new Date(s).toISOString().slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, "0"),
+    inIsrael = (d: Date) => {
+      if (Number.isNaN(d.getTime())) return "";
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en", {
+          timeZone: "Asia/Jerusalem",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+          .formatToParts(d)
+          .map((part) => [part.type, part.value]),
+      );
+      return `${parts.year}-${parts.month}-${parts.day}`;
+    };
+  if (v instanceof Date) return inIsrael(v);
+  if (typeof v === "number") {
+    const d = XLSX.SSF.parse_date_code(v);
+    return d ? `${d.y}-${pad(d.m)}-${pad(d.d)}` : "";
+  }
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|T)/);
+  if (ymd) return `${ymd[1]}-${pad(Number(ymd[2]))}-${pad(Number(ymd[3]))}`;
+  const dmy = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (dmy) return `${dmy[3]}-${pad(Number(dmy[2]))}-${pad(Number(dmy[1]))}`;
+  return inIsrael(new Date(s));
 }
 function billingMonth(name: string) {
   const n = name.match(
@@ -386,13 +407,14 @@ function App() {
             .slice(bh.i + 1)
             .map((r, i) => {
               const d = String(r[bh.xi] ?? "").trim();
+              const date = iso(r[bh.di]);
               let debit = bh.de >= 0 ? Math.abs(asNumber(r[bh.de])) : 0,
                 credit = bh.cr >= 0 ? Math.abs(asNumber(r[bh.cr])) : 0,
                 amount = debit ? -debit : credit;
               if (!amount && bh.amt >= 0) amount = asNumber(r[bh.amt]);
               const special = isCardSettlement(d) || isInvestmentOrTransfer(d);
               return {
-                date: r[bh.di] ? iso(r[bh.di]) : "",
+                date,
                 description: d,
                 amount,
                 type: special ? "transfer" : amount < 0 ? "expense" : "income",
@@ -401,9 +423,7 @@ function App() {
                   : guessCategory(d),
                 reference: bh.ref >= 0 ? String(r[bh.ref] || "") : "",
                 includedInExpenses: !special,
-                yyyymm: r[bh.di]
-                  ? iso(r[bh.di]).slice(0, 7).replace("-", "")
-                  : "202609",
+                yyyymm: date ? date.slice(0, 7).replace("-", "") : "",
                 sourceType: "bank",
                 nature: special ? "one_time" : "variable",
                 ordinal: ordinal + i,
