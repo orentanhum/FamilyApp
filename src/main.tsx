@@ -280,6 +280,9 @@ function App() {
     [sourceFilter, setSourceFilter] = useState(""),
     [categoryFilter, setCategoryFilter] = useState(""),
     [subcategoryFilter, setSubcategoryFilter] = useState(""),
+    [summaryLevel, setSummaryLevel] = useState<"category" | "subcategory">(
+      "category",
+    ),
     [search, setSearch] = useState(""),
     [preview, setPreview] = useState<Tx[]>([]),
     [fileName, setFileName] = useState(""),
@@ -578,17 +581,23 @@ function App() {
       expenseRows.reduce((a: any, r) => {
         const c = r.category || "לא מסווג",
           s = r.subcategory || "ללא תת קטגוריה",
-          n = r.expense_nature || "variable",
-          k = [c, s, n].join("|");
+          k = summaryLevel === "category" ? c : [c, s].join("|");
         if (!a[k])
-          a[k] = { category: c, subcategory: s, nature: n, total: 0, count: 0 };
+          a[k] = {
+            category: c,
+            subcategory: summaryLevel === "subcategory" ? s : "",
+            total: 0,
+            count: 0,
+          };
         a[k].total += Math.abs(r.amount);
         a[k].count++;
         return a;
       }, {}),
     ).sort(
       (a: any, b: any) =>
-        a.category.localeCompare(b.category, "he") || b.total - a.total,
+        b.total - a.total ||
+        a.category.localeCompare(b.category, "he") ||
+        a.subcategory.localeCompare(b.subcategory, "he"),
     ),
     natureTotals = Object.entries(
       expenseRows.reduce((a: any, r) => {
@@ -851,28 +860,51 @@ function App() {
                 </article>
               ))}
             </section>
-            <h3>קטגוריות ותתי קטגוריות</h3>
+            <div className="title">
+              <div>
+                <h3>
+                  {summaryLevel === "category"
+                    ? "הוצאות לפי קטגוריה ראשית"
+                    : "הוצאות לפי תת קטגוריה"}
+                </h3>
+                <p>ממויין לפי סה״כ ההוצאה, מהגבוה לנמוך</p>
+              </div>
+              <button
+                className="secondary"
+                onClick={() =>
+                  setSummaryLevel((level) =>
+                    level === "category" ? "subcategory" : "category",
+                  )
+                }
+              >
+                {summaryLevel === "category"
+                  ? "פירוט לפי תת קטגוריה ↓"
+                  : "חזרה לקטגוריות ראשיות ↑"}
+              </button>
+            </div>
             <div className="tablewrap">
               <table>
                 <thead>
                   <tr>
                     <th>קטגוריה</th>
-                    <th>תת קטגוריה</th>
-                    <th>אופי</th>
+                    {summaryLevel === "subcategory" && (
+                      <th>תת קטגוריה</th>
+                    )}
                     <th>תנועות</th>
                     <th>סה״כ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.map((r: any) => (
-                    <tr key={`${r.category}|${r.subcategory}|${r.nature}`}>
+                    <tr key={`${r.category}|${r.subcategory}`}>
                       <td>
                         <b>{r.category}</b>
                       </td>
-                      <td>{r.subcategory}</td>
-                      <td>{natureLabel(r.nature)}</td>
+                      {summaryLevel === "subcategory" && (
+                        <td>{r.subcategory}</td>
+                      )}
                       <td>{r.count}</td>
-                      <td>{money(r.total)}</td>
+                      <td dir="ltr">{money(r.total)}</td>
                     </tr>
                   ))}
                 </tbody>
