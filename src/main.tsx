@@ -81,6 +81,22 @@ function simpleHash(raw: string, p = "x") {
   }
   return p + "_" + (h >>> 0).toString(16) + "_" + raw.length;
 }
+function merchantKey(description: string) {
+  return norm(description)
+    .replace(/[\u200e\u200f]/g, "")
+    .replace(/(?:עסקה|עסקת|חיוב|תשלום|אישור|אסמכתא)\s*[:#-]?\s*\d+/g, " ")
+    .replace(/\b\d{4,}\b/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function daysApart(a: string, b: string) {
+  const one = Date.parse(`${a}T00:00:00Z`),
+    two = Date.parse(`${b}T00:00:00Z`);
+  return Number.isFinite(one) && Number.isFinite(two)
+    ? Math.abs(one - two) / 86400000
+    : Number.POSITIVE_INFINITY;
+}
 function installment(ref: string) {
   const s = norm(ref);
   const m = s.match(/(?:תשלום\s*)?(\d+)\s*(?:מתוך|מ\s*-?)\s*(\d+)/);
@@ -639,7 +655,41 @@ function App() {
       .reduce((s, r) => s + r.amount, 0),
     currentUnclassified = current.filter(
       (r) => !r.category || r.category === "לא מסווג",
-    ).length;
+    ).length,
+    currentCardCharges = current.filter(
+      (r) => r.source_type === "credit_card" && r.amount < 0,
+    ),
+    previousMerchantKeys = new Set(
+      db
+        .filter(
+          (r) =>
+            r.source_type === "credit_card" &&
+            r.amount < 0 &&
+            Number(r.yyyymm || 0) < currentPeriod,
+        )
+        .map((r) => merchantKey(r.description))
+        .filter(Boolean),
+    ),
+    newMerchantCharges = currentCardCharges.filter((r) => {
+      const key = merchantKey(r.description);
+      return Boolean(key) && !previousMerchantKeys.has(key);
+    }),
+    duplicateChargeIds = new Set(
+      currentCardCharges.flatMap((r, i, rows) =>
+        rows.some(
+          (other, j) =>
+            i !== j &&
+            merchantKey(r.description) === merchantKey(other.description) &&
+            Math.abs(Math.abs(r.amount) - Math.abs(other.amount)) < 0.01 &&
+            daysApart(r.transaction_date, other.transaction_date) <= 3,
+        )
+          ? [r.id]
+          : [],
+      ),
+    ),
+    duplicateCharges = currentCardCharges.filter((r) =>
+      duplicateChargeIds.has(r.id),
+    );
   const filters = (
     <div className="actions">
       <select value={month} onChange={(e) => setMonth(e.target.value)}>
@@ -791,6 +841,32 @@ function App() {
             </section>
             <h3>תנועות {currentLabel}</h3>
             {txTable(current)}
+            <section className="suspiciousSection">
+              <div className="suspiciousTitle">
+                <div>
+                  <h3>חיובים חשודים לבדיקה</h3>
+                  <p>
+                    סימון אוטומטי בלבד — החיובים אינם נמחקים ואינם משתנים.
+                  </p>
+                </div>
+                <div className="suspiciousCounts">
+                  <span>{newMerchantCharges.length} בתי עסק חדשים</span>
+                  <span>{duplicateCharges.length} חיובים כפולים אפשריים</span>
+                </div>
+              </div>
+
+              <h3>בתי עסק חדשים החודש</h3>
+              <p className="sub">
+                חיובי אשראי מבתי עסק שלא נמצאו בחודשים קודמים.
+              </p>
+              {txTable(newMerchantCharges)}
+
+              <h3>חיובים כפולים אפשריים</h3>
+              <p className="sub">
+                אותו בית עסק ואותו סכום שחויבו שוב בתוך שלושה ימים.
+              </p>
+              {txTable(duplicateCharges)}
+            </section>
           </>
         )}
         {page === "members" && (
