@@ -163,6 +163,36 @@ tbody tr:hover {
 .title p {
   margin: 2px 0;
 }
+.suspiciousSection {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 2px solid #e2e8f0;
+}
+.suspiciousTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.suspiciousTitle p,
+.suspiciousSection > .sub {
+  margin: 2px 0 6px;
+}
+.suspiciousCounts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.suspiciousCounts span {
+  padding: 5px 8px;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .authPage {
   min-height: 100vh;
   display: grid;
@@ -257,6 +287,13 @@ tbody tr:hover {
   }
   .cards span {
     font-size: 11px;
+  }
+  .suspiciousTitle {
+    display: block;
+  }
+  .suspiciousCounts {
+    justify-content: flex-start;
+    margin: 7px 0;
   }
   main {
     margin: 10px auto;
