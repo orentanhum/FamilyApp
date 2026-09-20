@@ -102,19 +102,28 @@ function installment(ref: string) {
   const m = s.match(/(?:תשלום\s*)?(\d+)\s*(?:מתוך|מ\s*-?)\s*(\d+)/);
   return m ? `${m[1]}/${m[2]}` : "";
 }
-function identity(r: Tx) {
-  const inst = installment(r.reference);
-  const stableRef = norm(r.reference)
+function stableReference(ref: string) {
+  return norm(ref)
     .replace(/מזהה כרטיס[^,.;]*/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+function contentKey(r: Tx) {
+  return [
+    r.sourceType,
+    norm(r.description),
+    r.amount.toFixed(2),
+    installment(r.reference) || stableReference(r.reference),
+  ].join("|");
+}
+function identity(r: Tx) {
   return simpleHash(
     [
       r.sourceType,
       iso(r.date),
       norm(r.description),
       r.amount.toFixed(2),
-      inst || stableRef,
+      installment(r.reference) || stableReference(r.reference),
     ].join("|"),
     "tx4",
   );
@@ -372,7 +381,7 @@ function App() {
     if (error) throw error;
     return (data || []) as Mapping[];
   }
-  async function markDuplicates(rows: Tx[], fid: string) {
+  async function markDuplicates(rows: Tx[], fid: string, importingFile: string) {
     const prepared = rows.map((r) => ({
       ...r,
       identity: identity(r),
@@ -384,7 +393,7 @@ function App() {
       const { data, error } = await supabase
         .from("transactions")
         .select(
-          "id,transaction_identity,transaction_date,description,amount,reference,source_type",
+          "id,transaction_identity,transaction_date,description,amount,reference,source_type,source_file,yyyymm",
         )
         .eq("family_id", fid)
         .eq("is_active", true)
@@ -392,14 +401,87 @@ function App() {
       if (error) throw error;
       existing.push(...(data || []));
     }
-    const seen = new Set(existing.map((x) => x.transaction_identity));
-    const local = new Map<string, number>();
+
+    const periods = [
+      ...new Set(
+        prepared
+          .map((r) => Number(r.yyyymm || 0))
+          .filter((x) => Number.isFinite(x) && x > 0),
+      ),
+    ];
+    const sources = [
+      ...new Set(prepared.map((r) => r.sourceType).filter(Boolean)),
+    ] as string[];
+    if (periods.length && sources.length) {
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select(
+            "id,transaction_identity,transaction_date,description,amount,reference,source_type,source_file,yyyymm",
+          )
+          .eq("family_id", fid)
+          .eq("is_active", true)
+          .in("yyyymm", periods)
+          .in("source_type", sources)
+          .range(from, from + 999);
+        if (error) throw error;
+        existing.push(...(data || []));
+        if ((data || []).length < 1000) break;
+      }
+    }
+
+    const uniqueExisting = [
+      ...new Map(existing.map((x) => [x.id, x])).values(),
+    ];
+    const exact = new Map<string, any[]>();
+    const nearby = new Map<string, any[]>();
+    for (const x of uniqueExisting) {
+      if (x.transaction_identity) {
+        const list = exact.get(x.transaction_identity) || [];
+        list.push(x);
+        exact.set(x.transaction_identity, list);
+      }
+      const key = contentKey({
+        date: x.transaction_date,
+        description: x.description,
+        amount: Number(x.amount),
+        type: "",
+        category: "",
+        reference: x.reference || "",
+        includedInExpenses: true,
+        yyyymm: String(x.yyyymm || ""),
+        sourceType: x.source_type,
+      });
+      const list = nearby.get(key) || [];
+      list.push(x);
+      nearby.set(key, list);
+    }
+    const used = new Set<string>();
     return prepared.map((r) => {
-      const n = local.get(r.identity!) || 0;
-      local.set(r.identity!, n + 1);
-      if (seen.has(r.identity!)) return { ...r, dup: "existing" as Dup };
-      if (n > 0 && !installment(r.reference))
-        return { ...r, dup: "possible" as Dup };
+      const exactMatch = (exact.get(r.identity!) || []).find(
+        (x) => !used.has(x.id),
+      );
+      if (exactMatch) {
+        used.add(exactMatch.id);
+        return { ...r, dup: "existing" as Dup };
+      }
+      const nearbyMatch = (nearby.get(contentKey(r)) || [])
+        .filter(
+          (x) =>
+            !used.has(x.id) &&
+            x.source_file !== importingFile &&
+            Number(x.yyyymm || 0) === Number(r.yyyymm || 0) &&
+            daysApart(x.transaction_date, r.date) <= 1,
+        )
+        .sort(
+          (a, b) =>
+            daysApart(a.transaction_date, r.date) -
+            daysApart(b.transaction_date, r.date),
+        )[0];
+      if (nearbyMatch) {
+        used.add(nearbyMatch.id);
+        return { ...r, dup: "existing" as Dup };
+      }
       return r;
     });
   }
@@ -452,6 +534,7 @@ function App() {
           out = await markDuplicates(
             out.map((r) => applyMapping(r, maps)),
             fid,
+            file.name,
           );
           setPreview(out);
           setMsg(
@@ -470,6 +553,7 @@ function App() {
       card = await markDuplicates(
         card.map((r) => applyMapping(r, maps)),
         fid,
+        file.name,
       );
       setPreview(card);
       setMsg(
