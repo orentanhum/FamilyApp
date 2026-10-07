@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test:import": "node --experimental-strip-types scripts/verify-fibi-import.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.0",
