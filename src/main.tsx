@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import * as XLSX from "xlsx";
 import "./style.css";
 import { supabase } from "./supabase";
+import { billingMonthFromText } from "./import-period";
 const members = ["ליאת", "אורן", "רום", "נועם", "אלון", "אמיר", "ג׳וי"];
 type Dup = "new" | "existing" | "possible";
 type Tx = {
@@ -51,6 +52,7 @@ const months = [
   ["202607", "יולי"],
   ["202608", "אוגוסט"],
   ["202609", "ספטמבר"],
+  ["202610", "אוקטובר"],
 ];
 const natureLabel = (n: string | null) =>
   (
@@ -239,9 +241,12 @@ function applyMapping(r: Tx, maps: Mapping[]) {
 function parseCard(raw: any[][], file: string, startOrdinal = 0) {
   const out: Tx[] = [];
   let h: string[] | null = null,
-    ordinal = startOrdinal;
+    ordinal = startOrdinal,
+    activeBillingMonth = billingMonth(file);
   for (const row of raw) {
     const c = row.map((v) => String(v ?? "").trim());
+    const parsedBillingMonth = billingMonthFromText(c.join(" "));
+    if (parsedBillingMonth) activeBillingMonth = parsedBillingMonth;
     if (
       c.includes("תאריך עסקה") &&
       c.some((v) => /שם\s*העסק/.test(v)) &&
@@ -269,7 +274,8 @@ function parseCard(raw: any[][], file: string, startOrdinal = 0) {
       category: guessCategory(desc),
       reference: ri >= 0 ? String(row[ri] ?? "") : "",
       includedInExpenses: true,
-      yyyymm: billingMonth(file) || "202609",
+      yyyymm:
+        activeBillingMonth || iso(row[di]).slice(0, 7).replace("-", ""),
       sourceType: "credit_card",
       nature: "variable",
       ordinal: ordinal++,
