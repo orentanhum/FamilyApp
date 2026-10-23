@@ -374,7 +374,7 @@ function App() {
     }).formatToParts(new Date()).map(part => [part.type, part.value]));
     const period = Number(`${parts.year}${parts.month}`);
     const candidates = db.filter(r => r.yyyymm === period &&
-      /^\\d{4}-\\d{2}-\\d{2}/.test(r.transaction_date) &&
+      /^\d{4}-\d{2}-\d{2}/.test(r.transaction_date) &&
       Number(r.transaction_date.slice(0, 7).replace("-", "")) !== period);
     if (!candidates.length) {
       setMsg("אין תנועות מחודשים אחרים להעברה.");
@@ -768,7 +768,7 @@ function App() {
       year: "numeric",
     }).format(new Date()),
     current = db.filter((r) => r.yyyymm === currentPeriod),
-    otherMonthCount = current.filter((r) => /^\\d{4}-\\d{2}-\\d{2}/.test(r.transaction_date) && Number(r.transaction_date.slice(0, 7).replace("-", "")) !== currentPeriod).length,
+    otherMonthCount = current.filter((r) => /^\d{4}-\d{2}-\d{2}/.test(r.transaction_date) && Number(r.transaction_date.slice(0, 7).replace("-", "")) !== currentPeriod).length,
     currentBankCount = current.filter((r) => r.source_type === "bank").length,
     currentCardCount = current.filter(
       (r) => r.source_type === "credit_card",
