@@ -317,7 +317,8 @@ function App() {
     [search, setSearch] = useState(""),
     [preview, setPreview] = useState<Tx[]>([]),
     [fileName, setFileName] = useState(""),
-    [saving, setSaving] = useState(false);
+    [saving, setSaving] = useState(false),
+    [movingOld, setMovingOld] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     supabase.auth
@@ -365,6 +366,44 @@ function App() {
       setDb(all);
     } catch (e: any) {
       setMsg(e.message);
+    }
+  }
+  async function moveOtherMonthTransactions() {
+    const period = Number(new Intl.DateTimeFormat("en", {
+      timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit",
+    }).format(new Date()).replace(/\\D/g, ""));
+    const candidates = db.filter(r => r.yyyymm === period &&
+      /^\\d{4}-\\d{2}-\\d{2}/.test(r.transaction_date) &&
+      Number(r.transaction_date.slice(0, 7).replace("-", "")) !== period);
+    if (!candidates.length) {
+      setMsg("אין תנועות מחודשים אחרים להעברה.");
+      return;
+    }
+    const total = candidates.reduce((sum, r) => sum + r.amount, 0);
+    if (!window.confirm(`להעביר ${candidates.length} תנועות (סכום נטו ${money(total)}) מחישוב החודש לחודשים של תאריך העסקה שלהן? התנועות יישארו במאגר ובסיכומים הכלליים.`)) return;
+    setMovingOld(true);
+    try {
+      const fid = await familyId();
+      const groups = new Map<number, string[]>();
+      for (const r of candidates) {
+        const target = Number(r.transaction_date.slice(0, 7).replace("-", ""));
+        groups.set(target, [...(groups.get(target) || []), r.id]);
+      }
+      for (const [target, ids] of groups) {
+        for (let i = 0; i < ids.length; i += 100) {
+          const { error } = await supabase.from("transactions")
+            .update({ yyyymm: target }).eq("family_id", fid)
+            .in("id", ids.slice(i, i + 100));
+          if (error) throw error;
+        }
+      }
+      await load();
+      setMsg(`הועברו ${candidates.length} תנועות לחודשים המתאימים. הן נשמרו בחישוב הכללי.`);
+    } catch (e: any) {
+      await load();
+      setMsg("שגיאה בהעברה: " + e.message);
+    } finally {
+      setMovingOld(false);
     }
   }
   async function login(e: React.FormEvent) {
@@ -728,6 +767,7 @@ function App() {
       year: "numeric",
     }).format(new Date()),
     current = db.filter((r) => r.yyyymm === currentPeriod),
+    otherMonthCount = current.filter((r) => /^\\d{4}-\\d{2}-\\d{2}/.test(r.transaction_date) && Number(r.transaction_date.slice(0, 7).replace("-", "")) !== currentPeriod).length,
     currentBankCount = current.filter((r) => r.source_type === "bank").length,
     currentCardCount = current.filter(
       (r) => r.source_type === "credit_card",
@@ -907,9 +947,12 @@ function App() {
                   {currentCardCount} אשראי
                 </p>
               </div>
-              <button onClick={() => input.current?.click()}>
-                📥 ייבוא תנועות
-              </button>
+              <div>
+                <button disabled={movingOld || otherMonthCount === 0} onClick={moveOtherMonthTransactions}>
+                  {movingOld ? "מעביר..." : `העבר ${otherMonthCount} תנועות מחודשים אחרים לחישוב הכללי`}
+                </button>{" "}
+                <button onClick={() => input.current?.click()}>📥 ייבוא תנועות</button>
+              </div>
             </div>
             <section className="cards">
               <article>
