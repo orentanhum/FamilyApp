@@ -369,9 +369,10 @@ function App() {
     }
   }
   async function moveOtherMonthTransactions() {
-    const period = Number(new Intl.DateTimeFormat("en", {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en", {
       timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit",
-    }).format(new Date()).replace(/\\D/g, ""));
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
+    const period = Number(`${parts.year}${parts.month}`);
     const candidates = db.filter(r => r.yyyymm === period &&
       /^\\d{4}-\\d{2}-\\d{2}/.test(r.transaction_date) &&
       Number(r.transaction_date.slice(0, 7).replace("-", "")) !== period);
