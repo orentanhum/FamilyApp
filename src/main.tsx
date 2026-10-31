@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import "./style.css";
 import { supabase } from "./supabase";
 import { billingMonthFromText } from "./import-period";
+import AnnualAnalysis from "./AnnualAnalysis";
 const members = ["ליאת", "אורן", "רום", "נועם", "אלון", "אמיר", "ג׳וי"];
 type Dup = "new" | "existing" | "possible";
 type Tx = {
@@ -916,12 +917,14 @@ function App() {
           <button onClick={() => setPage("members")}>בני משפחה</button>
           <button onClick={() => setPage("transactions")}>תנועות כספיות</button>
           <button onClick={() => setPage("summary")}>סיכומים</button>
+          <button aria-current={page === "annual" ? "page" : undefined} onClick={() => setPage("annual")}>ניתוח שנתי</button>
           <button className="secondary" onClick={() => supabase.auth.signOut()}>
             יציאה
           </button>
         </nav>
       </header>
       <main>
+        {page === "annual" && <AnnualAnalysis rows={db} />}
         {page === "home" && (
           <>
             <h2>שלום משפחת תנחום 👋</h2>
