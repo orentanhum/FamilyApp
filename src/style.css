@@ -38,7 +38,23 @@ p {
 nav {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
+nav button[aria-current="page"] {
+  background: #2563eb;
+  color: white;
+}
+.annualTitle { flex-wrap: wrap; }
+.annualTitle select { margin-inline-start: 8px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 7px; background: white; }
+.annualSection { padding: 14px; margin: 14px 0; background: white; border: 1px solid #e6e8ee; border-radius: 9px; min-width: 0; }
+.annualSection > h3 { margin-top: 0; margin-bottom: 12px; }
+.annualSection .title { flex-wrap: wrap; margin-bottom: 10px; }
+.annualTable { max-height: none; }
+.annualTable th, .annualTable td { padding: 9px 10px; }
+.annualTable tbody th { position: static; background: transparent; color: inherit; }
+.annualEmpty { padding: 12px 0; margin: 0; }
+.annualMonths { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 14px; }
+.annualMonths .annualSection { margin: 0; }
 button {
   border: 0;
   border-radius: 8px;
