@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { analysisPeriod, summarizeExpenses } from "../src/annual-analysis.ts";
+import { analysisPeriod, summarizeExpenses, summarizeMerchants } from "../src/annual-analysis.ts";
 
 const expense = (overrides = {}) => ({
   transaction_date: "2025-12-15", yyyymm: 202601, amount: -100,
@@ -28,3 +28,18 @@ const dated = rows.map(row => ({ row, period: analysisPeriod(row) }));
 const months = Array.from({ length: 12 }, (_, i) => `2026${String(i + 1).padStart(2, "0")}`);
 assert.equal(months.reduce((sum, month) => sum + Math.round(summarizeExpenses(dated.filter(item => item.period === month).map(item => item.row)).total * 100), 0), Math.round(summary.total * 100));
 console.log("Annual analysis checks passed");
+const merchants = summarizeMerchants([
+  expense({ description: "  ACME  SHOP ", amount: -200 }),
+  expense({ description: "acme shop", amount: -300 }),
+  expense({ description: "OTHER", amount: -400 }),
+  expense({ description: "ACME SHOP", amount: -900, included_in_expenses: false }),
+]);
+assert.equal(merchants.top[0].category, "ACME SHOP");
+assert.equal(merchants.top[0].total, 500);
+assert.equal(merchants.top[0].count, 2);
+assert.equal(merchants.total, 900);
+assert.equal(summarizeMerchants([
+  expense({ description: "העברה מהחשבון", subcategory: "שכר דירה" }),
+  expense({ description: "העברה מהחשבון", subcategory: "פיזיותרפיה" }),
+]).top.length, 2);
+console.log("Merchant ranking checks passed");

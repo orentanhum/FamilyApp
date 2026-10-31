@@ -5,6 +5,8 @@ export type AnalysisTransaction = {
   transaction_type: string;
   included_in_expenses: boolean;
   category: string | null;
+  description?: string;
+  subcategory?: string | null;
 };
 
 export function analysisPeriod(row: AnalysisTransaction): string {
@@ -33,4 +35,19 @@ export function summarizeExpenses(rows: AnalysisTransaction[]) {
     count: ranked.reduce((sum, row) => sum + row.count, 0),
     top: ranked.slice(0, 10),
   };
+}
+
+export function summarizeMerchants(rows: AnalysisTransaction[]) {
+  const names = new Map<string, string>();
+  return summarizeExpenses(rows.map(row => {
+    let name = (row.description || "בית עסק לא ידוע").normalize("NFKC")
+      .replace(/[\u200e\u200f]/g, "").replace(/\s+/g, " ").trim();
+    // Generic bank descriptions can represent several different payees.
+    if (/^(העברה מהחשבון|העברה לחשבון|העברה מבנק אחר|ספקים|PAYBOX)$/i.test(name)) {
+      name += ` — ${row.subcategory?.trim() || "מקבל לא מזוהה"}`;
+    }
+    const key = name.toLocaleLowerCase("he-IL");
+    if (!names.has(key)) names.set(key, name);
+    return { ...row, category: names.get(key)! };
+  }));
 }

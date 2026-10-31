@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { analysisPeriod, summarizeExpenses, type AnalysisTransaction } from "./annual-analysis";
+import { analysisPeriod, summarizeExpenses, summarizeMerchants, type AnalysisTransaction } from "./annual-analysis";
 
 const money = (value: number) => new Intl.NumberFormat("he-IL", {
   style: "currency", currency: "ILS",
@@ -7,12 +7,12 @@ const money = (value: number) => new Intl.NumberFormat("he-IL", {
 const monthNames = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
   "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 
-function Ranking({ summary, label }: {
-  summary: ReturnType<typeof summarizeExpenses>; label: string;
+function Ranking({ summary, label, column = "קטגוריה" }: {
+  summary: ReturnType<typeof summarizeExpenses>; label: string; column?: string;
 }) {
   if (!summary.count) return <p className="annualEmpty">אין הוצאות להצגה בתקופה זו.</p>;
   return <div className="tablewrap annualTable"><table aria-label={label}>
-    <thead><tr><th>דירוג</th><th>קטגוריה</th><th>תנועות</th><th>סה״כ הוצאות</th><th>אחוז מההוצאות</th></tr></thead>
+    <thead><tr><th>דירוג</th><th>{column}</th><th>תנועות</th><th>סה״כ הוצאות</th><th>אחוז מההוצאות</th></tr></thead>
     <tbody>{summary.top.map((row, index) => <tr key={row.category}>
       <td>{index + 1}</td><th scope="row">{row.category}</th><td>{row.count}</td>
       <td dir="ltr">{money(row.total)}</td>
@@ -27,6 +27,7 @@ export default function AnnualAnalysis({ rows }: { rows: AnalysisTransaction[] }
   const [year, setYear] = useState(currentYear);
   const dated = rows.map(row => ({ row, period: analysisPeriod(row) }));
   const annual = summarizeExpenses(dated.filter(item => item.period.slice(0, 4) === year).map(item => item.row));
+  const merchants = summarizeMerchants(dated.filter(item => item.period.slice(0, 4) === year).map(item => item.row));
   const monthly = monthNames.map((name, index) => {
     const period = year + String(index + 1).padStart(2, "0");
     const monthRows = dated.filter(item => item.period === period).map(item => item.row);
@@ -34,7 +35,7 @@ export default function AnnualAnalysis({ rows }: { rows: AnalysisTransaction[] }
   });
   return <div className="annualAnalysis">
     <div className="title annualTitle"><div><h2>ניתוח שנתי</h2>
-      <p>10 קטגוריות ההוצאה הגבוהות בשנה ובכל חודש, מהגבוה לנמוך</p></div>
+      <p>טופ 10 בתי עסק בשנה, ואחריהם קטגוריות ההוצאה בשנה ובכל חודש</p></div>
       <label>שנה <select value={year} onChange={event => setYear(event.target.value)}>
         {years.map(value => <option key={value}>{value}</option>)}
       </select></label>
@@ -44,6 +45,11 @@ export default function AnnualAnalysis({ rows }: { rows: AnalysisTransaction[] }
       <article><b>{money(annual.total)}</b><span>סה״כ הוצאות ב־{year}</span></article>
       <article><b>{annual.count}</b><span>תנועות הוצאה</span></article>
       <article><b>{monthly.filter(month => month.hasData).length}</b><span>חודשים עם תנועות במאגר</span></article>
+    </section>
+    <section className="annualSection" aria-labelledby="annualMerchantsTitle">
+      <h3 id="annualMerchantsTitle">טופ 10 בתי עסק — סיכום הוצאות בשנת {year}</h3>
+      <p className="sub">סיכום כל ההוצאות לכל בית עסק בשנה שנבחרה, מהגבוה לנמוך. האיחוד לפי שם העסק כפי שמופיע בתנועות; העברות כלליות מוצגות עם פירוט המקבל כשקיים.</p>
+      <Ranking summary={merchants} column="בית עסק / מקבל" label={`טופ 10 בתי עסק בשנת ${year}`} />
     </section>
     <section className="annualSection" aria-labelledby="annualTopTitle">
       <h3 id="annualTopTitle">טופ 10 קטגוריות — שנת {year}</h3>
